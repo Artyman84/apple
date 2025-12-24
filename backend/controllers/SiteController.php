@@ -2,7 +2,10 @@
 
 namespace backend\controllers;
 
-use common\models\LoginForm;
+use backend\forms\auth\LoginForm;
+use backend\helper\AppHelper;
+use DomainException;
+use Exception;
 use Yii;
 use yii\filters\VerbFilter;
 use yii\filters\AccessControl;
@@ -17,7 +20,7 @@ class SiteController extends Controller
     /**
      * {@inheritdoc}
      */
-    public function behaviors()
+    public function behaviors(): array
     {
         return [
             'access' => [
@@ -46,7 +49,7 @@ class SiteController extends Controller
     /**
      * {@inheritdoc}
      */
-    public function actions()
+    public function actions(): array
     {
         return [
             'error' => [
@@ -60,7 +63,7 @@ class SiteController extends Controller
      *
      * @return string
      */
-    public function actionIndex()
+    public function actionIndex(): string
     {
         return $this->render('index');
     }
@@ -69,8 +72,10 @@ class SiteController extends Controller
      * Login action.
      *
      * @return string|Response
+     *
+     * @throws Exception
      */
-    public function actionLogin()
+    public function actionLogin(): Response|string
     {
         if (!Yii::$app->user->isGuest) {
             return $this->goHome();
@@ -78,15 +83,21 @@ class SiteController extends Controller
 
         $this->layout = 'blank';
 
-        $model = new LoginForm();
-        if ($model->load(Yii::$app->request->post()) && $model->login()) {
-            return $this->goBack();
+        $form = new LoginForm();
+        if ($form->load($this->request->post()) && $form->validate()) {
+            try {
+                $user = AppHelper::getAuthService()->authenticate($form);
+                Yii::$app->user->login($user, $form->rememberMe ? Yii::$app->params['user.rememberMeDuration'] : 0);
+                return $this->goBack();
+            } catch (DomainException $e) {
+                Yii::$app->session->setFlash('danger', $e->getMessage());
+            }
         }
 
-        $model->password = '';
+        $form->password = '';
 
         return $this->render('login', [
-            'model' => $model,
+            'model' => $form,
         ]);
     }
 
@@ -95,7 +106,7 @@ class SiteController extends Controller
      *
      * @return Response
      */
-    public function actionLogout()
+    public function actionLogout(): Response
     {
         Yii::$app->user->logout();
 
