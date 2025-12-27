@@ -2,10 +2,12 @@
 
 namespace backend\controllers;
 
+use backend\exceptions\ApplicationException;
 use backend\forms\auth\LoginForm;
 use backend\helper\AppHelper;
 use DomainException;
-use Exception;
+use Random\RandomException;
+use Throwable;
 use Yii;
 use yii\filters\VerbFilter;
 use yii\filters\AccessControl;
@@ -22,6 +24,8 @@ class SiteController extends Controller
      */
     public function behaviors(): array
     {
+        $postActions = ['logout', 'generate-apples', 'delete', 'fall-to-ground', 'eat'];
+
         return [
             'access' => [
                 'class' => AccessControl::class,
@@ -31,7 +35,7 @@ class SiteController extends Controller
                         'allow' => true,
                     ],
                     [
-                        'actions' => ['logout', 'index'],
+                        'actions' => ['logout', 'index', 'generate-apples', 'delete', 'fall-to-ground', 'eat'],
                         'allow' => true,
                         'roles' => ['@'],
                     ],
@@ -39,9 +43,7 @@ class SiteController extends Controller
             ],
             'verbs' => [
                 'class' => VerbFilter::class,
-                'actions' => [
-                    'logout' => ['post'],
-                ],
+                'actions' => array_fill_keys($postActions, ['post']),
             ],
         ];
     }
@@ -62,10 +64,87 @@ class SiteController extends Controller
      * Displays homepage.
      *
      * @return string
+     *
+     * @throws ApplicationException
      */
     public function actionIndex(): string
     {
-        return $this->render('index');
+        return $this->render('index', [
+            'appleEntities' => AppHelper::getAppleService()->getAllEntities(),
+        ]);
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return Response
+     *
+     * @throws ApplicationException|Throwable
+     */
+    public function actionFallToGround(int $id): Response
+    {
+        try {
+            AppHelper::getAppleService()->fallToGround($id);
+            Yii::$app->session->setFlash('success', 'Яблоко успешно упало');
+        } catch (DomainException $exception) {
+            Yii::$app->session->setFlash('danger', $exception->getMessage());
+        }
+
+        return $this->redirect('index');
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return Response
+     *
+     * @throws ApplicationException|Throwable
+     */
+    public function actionEat(int $id): Response
+    {
+        try {
+            $percent = Yii::$app->request->post('percent');
+            AppHelper::getAppleService()->eat($id, $percent);
+            Yii::$app->session->setFlash('success', 'Яблоко успешно съедено');
+        } catch (DomainException $exception) {
+            Yii::$app->session->setFlash('danger', $exception->getMessage());
+        }
+
+        return $this->redirect('index');
+    }
+
+    /**
+     * @return string
+     *
+     * @throws ApplicationException|RandomException
+     */
+    public function actionGenerateApples(): string
+    {
+        Yii::$app->response->format = Response::FORMAT_HTML;
+
+        return $this->renderPartial('_apples', [
+            'appleEntities' => AppHelper::getAppleService()->generateRandom(),
+            'now' => time(),
+        ]);
+    }
+
+    /**
+     * @param int $id
+     *
+     * @return Response
+     *
+     * @throws ApplicationException|RandomException|Throwable
+     */
+    public function actionDelete(int $id): Response
+    {
+        try {
+            AppHelper::getAppleService()->delete($id);
+            Yii::$app->session->setFlash('success', 'Яблоко успешно удалено');
+        } catch (DomainException $exception) {
+            Yii::$app->session->setFlash('danger', $exception->getMessage());
+        }
+
+        return $this->redirect('index');
     }
 
     /**
@@ -73,7 +152,7 @@ class SiteController extends Controller
      *
      * @return string|Response
      *
-     * @throws Exception
+     * @throws ApplicationException
      */
     public function actionLogin(): Response|string
     {
@@ -89,8 +168,8 @@ class SiteController extends Controller
                 $user = AppHelper::getAuthService()->authenticate($form);
                 Yii::$app->user->login($user, $form->rememberMe ? Yii::$app->params['user.rememberMeDuration'] : 0);
                 return $this->goBack();
-            } catch (DomainException $e) {
-                Yii::$app->session->setFlash('danger', $e->getMessage());
+            } catch (DomainException $exception) {
+                Yii::$app->session->setFlash('danger', $exception->getMessage());
             }
         }
 

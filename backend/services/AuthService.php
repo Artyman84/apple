@@ -6,12 +6,11 @@ use backend\contracts\services\IAuthService;
 use backend\forms\auth\LoginForm;
 use common\models\User;
 use DomainException;
-use Yii;
 
 /**
  * AuthService class
  */
-class AuthService implements IAuthService
+readonly class AuthService implements IAuthService
 {
     /**
      * {@inheritdoc}
@@ -21,11 +20,11 @@ class AuthService implements IAuthService
         $user = User::findByUsername($form->username);
 
         if (is_null($user) || $user->isDeleted() || false === $user->validatePassword($form->password)) {
-            throw new DomainException(Yii::t('app', 'Неверный логин или пароль.'));
+            throw new DomainException('Неверный логин или пароль.');
         }
 
         if ($user->isDisabled()) {
-            throw new DomainException(Yii::t('app', 'Ваш аккаунт заблокирован.'));
+            throw new DomainException('Ваш аккаунт заблокирован.');
         }
 
         return $user;
